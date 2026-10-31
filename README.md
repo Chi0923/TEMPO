@@ -29,7 +29,10 @@ One YJMob100K test window (test day 2, from 09:00), six 30-minute steps, mean of
 - **Result.** On YJMob100K (100K people, 75 days) TEMPO has the lowest MAE, RMSE and CRPS of five methods and cuts the mass-conservation error by **55%** against the same latent generator without physics.
 
 <p align="center">
-  <img src="assets/headline_numbers.png" width="100%" alt="Mass error vs. Latent FM −55.0% (0.0253 → 0.0114); MAE vs. Latent FM −17.0% (0.0112 → 0.0093, lowest MAE, RMSE and CRPS of all five methods); mass error vs. Gaussian-prior TEMPO −16.2% (0.0136 → 0.0114, ablation of the State-Informed Prior, MAE unchanged)">
+  <picture>
+    <source media="(max-width: 700px)" srcset="assets/headline_numbers_stack.png">
+    <img src="assets/headline_numbers.png" width="100%" alt="Mass error vs. Latent FM −55.0% (0.0253 → 0.0114); MAE vs. Latent FM −17.0% (0.0112 → 0.0093, lowest MAE, RMSE and CRPS of all five methods); mass error vs. Gaussian-prior TEMPO −16.2% (0.0136 → 0.0114, ablation of the State-Informed Prior, MAE unchanged)">
+  </picture>
 </p>
 
 ## How it works
