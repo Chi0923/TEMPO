@@ -16,11 +16,11 @@ Computer Science and Engineering, National Chung Hsing University, Taiwan
 </div>
 
 <p align="center">
-  <img src="assets/tempo_demo.gif" width="100%" alt="Animation: ground-truth crowd density, the Latent Flow Matching prediction and the TEMPO prediction over six 30-minute steps, with the total number of people per step plotted underneath. Latent FM drifts away from the true head count; TEMPO stays on it.">
+  <img src="assets/tempo_demo.gif" width="100%" alt="Animation over six 30-minute steps: ground-truth crowd density on the left, and the residual maps (prediction minus truth) for Latent FM and for TEMPO on the same colour scale, red = too many people, blue = too few, with the total number of people per step plotted underneath. Latent FM loses people over large areas of the city; TEMPO's residual stays near zero.">
 </p>
 
-<p align="center"><b>Same latent space, same decoder. Only TEMPO keeps the head count.</b><br>
-One YJMob100K test window (test day 2, from 09:00), six 30-minute steps, mean of 20 samples. Within an hour the Latent FM baseline has lost 7–9% of the people on the map and never gets them back; TEMPO advects the observed density through a continuity equation and stays within 4% of the true head count (mean error over the six steps: 7.1% vs. 2.3%).</p>
+<p align="center"><b>Same latent space, same generator. Only TEMPO keeps the head count.</b><br>
+Left: where the people are. Middle and right: prediction minus truth for Latent FM and for TEMPO on the same colour scale (red = too many people, blue = too few; smoothed over one cell for display). One YJMob100K test window (test day 2, from 09:00), six 30-minute steps, mean of 20 samples. Within an hour the Latent FM baseline has lost 7–9% of the people on the map, most of them in the city centre, and never gets them back; TEMPO advects the observed density through a continuity equation and stays within 4% of the true head count (mean error over the six steps: 7.1% vs. 2.3%).</p>
 
 ## TL;DR
 
