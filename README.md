@@ -20,13 +20,13 @@
 </p>
 
 <p align="center"><b>Same latent space, same generator. Only TEMPO keeps the head count.</b><br>
-A generative crowd-flow model that cannot create or destroy people. One held-out YJMob100K window, six 30-minute steps: the Latent FM baseline loses 7–9% of the people within an hour, TEMPO stays within 4%.</p>
+The first Flow Matching model for urban crowd flow, with the physics inside the generator. One held-out YJMob100K window, six 30-minute steps, counted in people: from the second step on the Latent FM baseline is missing 7–9% of the people (worst 9.4% at two hours), TEMPO never more than 4.0%. The headline mass error below is the same kind of quantity, but averaged over all test windows and measured in log-normalised density space, which is why it reads as 1.1% rather than a raw head-count percentage.</p>
 
 ## In three sentences
 
 - **Problem.** Generative crowd-flow models, diffusion models in particular, routinely create or destroy people: nothing in their density update enforces continuity, and a soft physics loss does not survive sampling noise.
-- **Idea.** Put the physics *inside* the generator. TEMPO decodes a velocity field and advects the density through a hard-coded continuity equation, and it starts Flow Matching from the encoded observed state instead of pure noise.
-- **Result.** On YJMob100K (100K people, 75 days) TEMPO has the lowest MAE, RMSE and CRPS of five methods and 55% less mass error than the same latent generator without physics.
+- **Idea.** Bring Flow Matching to crowd-flow generation for the first time, and put the physics *inside* the generator. TEMPO decodes a velocity field and advects the density through a hard-coded continuity equation; it starts Flow Matching from the encoded observed state instead of pure noise; and a three-stage training schedule fine-tunes the physics part on the latents the generator actually produces.
+- **Result.** On YJMob100K (100K people, 75 days) TEMPO has the lowest MAE, RMSE and CRPS of five methods and 55% less mass error than Latent FM, the same latent generator with a plain density decoder. Of the three ingredients, the hard-coded physics matters most, the fine-tuning second (it alone removes 56% of the remaining mass error), the prior third (16%).
 
 <p align="center">
   <picture>
@@ -43,23 +43,28 @@ A generative crowd-flow model that cannot create or destroy people. One held-out
   <img src="assets/velocity.gif" width="100%" alt="Animation over six steps: TEMPO's predicted density on the left, and the predicted velocity field as arrows on the right, one arrow per 3×3 cells where people are. Arrows converge on the city centre during the morning.">
 </p>
 
-The generator never outputs the next density map directly. It outputs a **velocity field** for every step, and the density is moved along it. Where arrows converge, people accumulate; where they diverge, people leave. Nothing else can change the head count.
+The generator never outputs the next density map directly. It outputs a **velocity field** for every step, and the density is moved along it. Where arrows converge, people accumulate; where they diverge, people leave. Nothing else can change the head count. The velocity is a state of its own rather than a function of the local density, in the spirit of second-order crowd models that give pedestrians directional inertia, instead of first-order models in which speed is read off the density.
 
 ### 2 · The density update is a conservation law, not a loss term
 
 <p align="center">
-  <img src="assets/architecture.png" width="100%" alt="TEMPO architecture: a frozen VAE encodes the observed density and POI maps; latent Flow Matching with a State-Informed Prior generates the future latent trajectory; a causal Velocity Decoder turns it into a velocity field; a hard-coded continuity equation plus a small CorrectionNet advects the density forward.">
+  <img src="assets/architecture.png" width="100%" alt="TEMPO architecture: a frozen VAE encodes the observed density; POI maps and the time context enter through their own encoders as conditioning; latent Flow Matching with a State-Informed Prior generates the future latent trajectory; a causal Velocity Decoder turns it into a velocity field; a hard-coded continuity equation plus a small CorrectionNet advects the density forward.">
 </p>
 
-A frozen VAE encodes the observed density $D_{t_0}$ and the POI maps. Latent Flow Matching generates the future latent trajectory, a causal Velocity Decoder turns it into $V_t$, and the density is advected by the discrete continuity equation:
+A frozen VAE encodes the observed density $D_{t_0}$; the POI maps and the time of day and week enter through separate encoders as conditioning. Latent Flow Matching generates the future latent trajectory, a causal Velocity Decoder turns it into $V_t$, and the density is advected by the discrete continuity equation:
 
 $$D_{t+1} = \mathrm{ReLU}\Big(D_t - \Delta t\,\nabla\cdot\big(D_t V_t\big) + \mathrm{Corr}_\psi(D_t, V_t)\Big)$$
 
-The divergence is a fixed $3\times3$ central-difference stencil with no learnable physics parameters. The only learned part of the update is the lightweight CorrectionNet, which absorbs what the idealised equation misses. Remove the physics and the mass error grows more than tenfold; remove the CorrectionNet and it grows almost as much. The two are jointly necessary.
+The divergence is a fixed $3\times3$ central-difference stencil with no learnable physics parameters. The only learned part of the update is the lightweight CorrectionNet, which absorbs the discretisation error and whatever else the idealised equation misses. Remove the continuity term from this update and the mass error grows more than tenfold (0.0114 → 0.1427); remove the CorrectionNet and it grows almost as much (0.1319) while MAE worsens from 0.0093 to 0.0154, below ST-ResNet. The two are jointly necessary.
+
+Note that "no continuity physics" is not the same model as the Latent FM baseline. Latent FM replaces the whole velocity-and-advection step with a plain decoder that outputs density directly (mass error 0.0253). The ablation keeps the Velocity Decoder and CorrectionNet but deletes the divergence term, which leaves the CorrectionNet to move all the mass by itself; it cannot, and the error is six times larger than Latent FM's.
+
+The third ingredient is how the physics part is trained. Fine-tuning the Velocity Decoder and CorrectionNet on latents sampled from the trained Flow Matching model, instead of on the VAE posterior, removes the train–inference shift at the decoder input and cuts the mass error from 0.0260 to 0.0114. This is the largest single gain after the physics itself.
 
 <details>
 <summary><b>More on the architecture and training</b></summary>
 
+- **Spatial Encoder.** A VAE rather than a plain autoencoder: the KL term pulls the latent towards an isotropic Gaussian, so Flow Matching has a smooth, continuous latent space to move through. The encoder also keeps the original spatial resolution during compression, so hotspot peaks are not smoothed away.
 - **State-Informed Prior.** Standard Flow Matching starts from $\mathcal{N}(0, I)$, far from the data. TEMPO starts from the encoded observed state, $x_0 \sim \mathcal{N}(z_{t_0}, \sigma^2 I)$ with $\sigma = 1$, and interpolates $x_t = (1-t)\,x_0 + t\,x_1$. Trained with the latent OT-CFM objective on a 3D U-Net; POI maps enter by channel concatenation and FiLM, time of day and week by FiLM.
 - **Velocity Decoder.** A causal 3D residual network over the latent trajectory: step $t$ only sees steps $\le t$, so no future information leaks into the velocity.
 - **Physics step.** The operator is rolled out for $T = 6$ steps of 30 minutes; ReLU keeps the density non-negative.
@@ -89,11 +94,11 @@ One hotspot cell, sixteen consecutive 3-hour windows, each generated from the ob
   <img src="assets/prior_paths.png" width="100%" alt="Generation paths in latent PCA space for one test case: Gaussian sources (orange) start far from the target and travel long paths; state-informed sources (blue) start next to it.">
 </p>
 
-Standard Flow Matching has to carry every sample from pure noise all the way to the data. Starting from the encoded observed state, the transport is shorter (not straighter: straightness is actually lower, 0.66 vs. 0.93) and stays in the physically feasible region. On its own the prior cuts the mass error by 16.2% and improves calibration (Cal-50% 0.39 → 0.42) at zero MAE cost.
+Standard Flow Matching has to carry every sample from pure noise all the way to the data. Starting from the encoded observed state, the sources sit next to the target, the transport is shorter (mean displacement 421 vs. 782, path length 634 vs. 845 in the full latent space) and it stays in the physically feasible region. This figure is an additional analysis on one test case and is not in the paper; the paper's evidence is the ablation: on its own the prior cuts the mass error by 16.2% and improves calibration (Cal-50% 0.39 → 0.42) at zero MAE cost.
 
 ## The numbers
 
-YJMob100K, mean over 5 seeds, log-normalised space, lower is better. Latent FM is the ablation twin of TEMPO: same VAE latent space, same Flow Matching generator, a plain decoder instead of the physics step.
+YJMob100K, mean over 5 seeds, log-normalised space, lower is better. Latent FM is the ablation twin of TEMPO: same VAE latent space, same Flow Matching generator, a plain density decoder instead of the Velocity Decoder, continuity step and CorrectionNet.
 
 | Method | MAE | RMSE | Mass error | CRPS |
 |---|:-:|:-:|:-:|:-:|
@@ -112,8 +117,8 @@ YJMob100K, mean over 5 seeds, log-normalised space, lower is better. Latent FM i
 | Gaussian prior instead of the State-Informed Prior | 0.0136 |
 | no Decoder fine-tune on FM-sampled latents | 0.0260 |
 | no CorrectionNet | 0.1319 |
-| no continuity physics | 0.1427 |
-| Latent FM baseline | 0.0253 |
+| no continuity physics (Velocity Decoder and CorrectionNet kept, divergence term removed) | 0.1427 |
+| Latent FM baseline (plain density decoder, no velocity step at all) | 0.0253 |
 | DiffSTG | 0.1560 |
 
 </details>
@@ -121,7 +126,7 @@ YJMob100K, mean over 5 seeds, log-normalised space, lower is better. Latent FM i
 <details>
 <summary><b>How is the mass error defined?</b></summary>
 
-For each future step, the absolute relative error between the predicted and the ground-truth total density over the whole map, averaged over the 6 steps and over the test windows (Eq. 4 in the paper). The ground-truth total itself varies in time, so this measures mass *consistency* with the data rather than strict conservation.
+For each future step, the absolute relative error between the predicted and the ground-truth total density over the whole map, averaged over the 6 steps and over the test windows (Eq. 4 in the paper). The ground-truth total itself varies in time, so this measures mass *consistency* with the data rather than strict conservation. Because it is computed in log-normalised space, its values are smaller than the raw head-count percentages shown in the hero animation (TEMPO 1.1% here vs. up to 4.0% in people on that window).
 
 </details>
 
@@ -136,9 +141,6 @@ For each future step, the absolute relative error between the predicted and the 
 | | |
 |---|---|
 | **Paper** · 4 pages, open access (CC BY 4.0) | [PDF](paper/TEMPO_SIGSPATIAL2026.pdf) · [DOI 10.1145/3841645.3843372](https://doi.org/10.1145/3841645.3843372) (resolves once the proceedings are in the ACM Digital Library) |
-| **Poster S-34** · 36 × 48 in | [PDF](poster/TEMPO_poster_S-34.pdf) |
-| **Lightning talk** · 70 s, silent, 1080p | [MP4](video/TEMPO_lightning_talk.mp4) |
-| **Code and checkpoints** | not public at the moment; e-mail the first author |
 | **Contact** | Han-Chi Chen, hank51201@gmail.com · Yi-Chung Chen (corresponding author), chenyich@nchu.edu.tw |
 
 ```bibtex
