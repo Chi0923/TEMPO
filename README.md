@@ -10,8 +10,6 @@
 **ACM SIGSPATIAL 2026** · Riverside, CA · Poster S-34
 
 [![Paper](https://img.shields.io/badge/Paper-PDF-2457A7)](paper/TEMPO_SIGSPATIAL2026.pdf)
-[![Poster](https://img.shields.io/badge/Poster-PDF-2457A7)](poster/TEMPO_poster_S-34.pdf)
-[![Lightning talk](https://img.shields.io/badge/Lightning%20talk-70%20s-2457A7)](video/TEMPO_lightning_talk.mp4)
 
 </div>
 
